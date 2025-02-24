@@ -60,12 +60,12 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
 
     def __init__(
         self,
-        block_size: int,
-        num_gpu_blocks: int,
-        num_cpu_blocks: int,
-        watermark: float = 0.01,
-        sliding_window: Optional[int] = None,
-        enable_caching: bool = False,
+        block_size: int,   # 每个 block 的大小，即 token 的数量，默认值为 16
+        num_gpu_blocks: int,  # 当前gpu上最多可以分配的 block 数量
+        num_cpu_blocks: int,  # 当前cpu上，用于做 swap 的内存中，最多可以分配的 block 数量
+        watermark: float = 0.01,  # 内存交换的水位线 （阈值）
+        sliding_window: Optional[int] = None,  # 滑动窗口的大小
+        enable_caching: bool = False,  # 是否需要做prefix caching
     ) -> None:
         self.block_size = block_size
         self.num_total_gpu_blocks = num_gpu_blocks
@@ -83,7 +83,9 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
             # For example, if sliding_window is 3 and block_size is 4,
             # we may need 2 blocks when the second block only holds 1 token.
             self.max_block_sliding_window = num_blocks + 1
-
+ 
+        # 水位线block数量，决定是否要给当前seq 分配 block
+        # 设置水位线block 的目的是不要一下打满设备中的物理块，留一些 buffer，避免频繁的内存交换
         self.watermark = watermark
         assert watermark >= 0.0
 
