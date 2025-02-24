@@ -100,6 +100,7 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
             block_size=block_size,
         )
 
+        # 记录每个序列的 block table
         self.block_tables: Dict[SeqId, BlockTable] = {}
         self.cross_block_tables: Dict[EncoderSeqId, BlockTable] = {}
 
@@ -113,7 +114,12 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
                      num_lookahead_slots: int = 0) -> AllocStatus:
         # FIXME(woosuk): Here we assume that all sequences in the group share
         # the same prompt. This may not be true for preempted sequences.
+        # 假设：一个 seq_group内所有的seq都共享相同的 prompt
 
+        # 确认是否可以为当前的seq_group分配物理块，返回结果有三种：NEVER, OK, LATER
+        # NEVER: 永远不可以分配
+        # OK: 可以分配
+        # LATER: 稍后再分配
         check_no_caching_or_swa_for_blockmgr_encdec(self, seq_group)
 
         seq = seq_group.get_seqs(status=SequenceStatus.WAITING)[0]
@@ -165,12 +171,15 @@ class SelfAttnBlockSpaceManager(BlockSpaceManager):
         return block_table
 
     def allocate(self, seq_group: SequenceGroup) -> None:
-
         # Allocate self-attention block tables for decoder sequences
         waiting_seqs = seq_group.get_seqs(status=SequenceStatus.WAITING)
         assert not (set(seq.seq_id for seq in waiting_seqs)
                     & self.block_tables.keys()), "block table already exists"
 
+        # 假设：一个 seq_group内所有的seq都共享相同的 prompt
+        # 正要对这个prompt 分配物理块
+        # waiting队列中所有的 seq_group都没做过 prefill，因此每个 seq_group下面只有 1 条 seq
+        # 这个seq即为prompt本身
         # NOTE: Here we assume that all sequences in the group have the same
         # prompt.
         seq = waiting_seqs[0]
