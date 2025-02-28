@@ -1341,6 +1341,8 @@ class LLMEngine:
         # batch has completed.
         # The scheduler is also skipped if a single request caused the last
         # engine step to fail, and the previous schedule needs to be rerun.
+        # 如果是multi-step，则remaining_steps > 0，则一次调度多次推理 scheduling + forward + forward ...
+        # 如果是single-step，则remaining_Steps ==0，则每次decode token前都需要调度 scheduling + forward + scheduling + forward ...
         if not self._has_remaining_steps(
                 seq_group_metadata_list
         ) and not self._skip_scheduling_next_step:
