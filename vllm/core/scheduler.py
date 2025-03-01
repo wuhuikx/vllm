@@ -1227,24 +1227,32 @@ class Scheduler:
         running_scheduled = SchedulerRunningOutputs.create_empty()
         swapped_in = SchedulerSwappedInOutputs.create_empty()
 
+        # 调度prefill队列
         # If any requests are swapped, prioritized swapped requests.
+        # 当前 swapped 中没有数据，则优先调度 waiting 队列，schedule prefill 阶段；
+        # 当 swapped 中有数据，则优先调度 swapped 队列
         if not self.swapped:
             prefills = self._schedule_prefills(budget,
                                                curr_loras,
                                                enable_chunking=False)
 
+        # 如果 prefill 没有数据，则调度 decode，如果是 priority 的抢占方式，则根据 FCFS 的定义，需要先调度之前被抢占的 decode
         if len(prefills.seq_groups
                ) == 0 and self.scheduler_config.policy == "priority":
             self._schedule_priority_preemption(budget)
 
+        # 调度 running + swapped 队列
+        # 如果 prefill 没有数据，则调度decode，调度running队列
         # Don't schedule decodes if prefills are scheduled.
         # NOTE: If `_schedule_prefills` doesn't enable chunking, self.running
         # only contains decode requests, not chunked prefills.
         if len(prefills.seq_groups) == 0:
+            # 调度running队列
             running_scheduled = self._schedule_running(budget,
                                                        curr_loras,
                                                        enable_chunking=False)
 
+            # 调度swapped队列
             # If any sequence group is preempted, do not swap in any sequence
             # group. because it means there's no slot for new running requests.
             if (len(running_scheduled.preempted) +
@@ -1252,10 +1260,13 @@ class Scheduler:
                 swapped_in = \
                     self._schedule_swapped(budget, curr_loras)
 
+        # 本次调度预计处理的 token 数 < 配置的最大 token 数目
+        # 本次调度预计处理的 Seq 数 < 配置的最大 Seq 数目
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_seqs <= self.scheduler_config.max_num_seqs
 
+        # 更新waiting队列，将被抢占的需要重计算的请求放入waiting队列
         # Update waiting requests.
         self.waiting.extendleft(running_scheduled.preempted)
         # Update new running requests.
