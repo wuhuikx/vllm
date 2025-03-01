@@ -1227,16 +1227,18 @@ class Scheduler:
         running_scheduled = SchedulerRunningOutputs.create_empty()
         swapped_in = SchedulerSwappedInOutputs.create_empty()
 
-        # 调度prefill队列
-        # If any requests are swapped, prioritized swapped requests.
+        # 调度waiting队列
         # 当前 swapped 中没有数据，则优先调度 waiting 队列，schedule prefill 阶段；
         # 当 swapped 中有数据，则优先调度 swapped 队列
+        # If any requests are swapped, prioritized swapped requests.
         if not self.swapped:
             prefills = self._schedule_prefills(budget,
                                                curr_loras,
                                                enable_chunking=False)
 
-        # 如果 prefill 没有数据，则调度 decode，如果是 priority 的抢占方式，则根据 FCFS 的定义，需要先调度之前被抢占的 decode
+        # 调度waiting队列
+        # 如果policy为priority， 发生抢占行为
+        # waiting队列中priority较高的request替换running队列中priority较低的请求 
         if len(prefills.seq_groups
                ) == 0 and self.scheduler_config.policy == "priority":
             self._schedule_priority_preemption(budget)
@@ -1260,8 +1262,8 @@ class Scheduler:
                 swapped_in = \
                     self._schedule_swapped(budget, curr_loras)
 
-        # 本次调度预计处理的 token 数 < 配置的最大 token 数目
-        # 本次调度预计处理的 Seq 数 < 配置的最大 Seq 数目
+        # 本次调度预计处理的token数 < 配置的最大token数目
+        # 本次调度预计处理的Seq数 < 配置的最大Seq数目
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_seqs <= self.scheduler_config.max_num_seqs
